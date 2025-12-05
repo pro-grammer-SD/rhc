@@ -6,7 +6,7 @@ st.set_page_config(page_title="📊 HC Stats", layout="wide")
 st.title("📊 Handcricket Stats")
 
 # Load CSV
-df = pd.read_csv("stats.csv")
+df = pd.read_csv("../data/stats.csv")
 
 # Function to assign rank based on ELO
 def get_rank(elo):
