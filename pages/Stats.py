@@ -1,12 +1,17 @@
 import streamlit as st
 import pandas as pd
+import os
 
 st.set_page_config(page_title="📊 HC Stats", layout="wide")
 
 st.title("📊 Handcricket Stats")
 
+# Construct path to stats.csv reliably
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))  # one folder up from pages/
+DATA_PATH = os.path.join(BASE_DIR, "data", "stats.csv")
+
 # Load CSV
-df = pd.read_csv("../data/stats.csv")
+df = pd.read_csv(DATA_PATH)
 
 # Function to assign rank based on ELO
 def get_rank(elo):
