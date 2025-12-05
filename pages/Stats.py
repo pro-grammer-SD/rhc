@@ -4,16 +4,14 @@ import os
 
 st.set_page_config(page_title="📊 HC Stats", layout="wide")
 
-st.title("📊 Handcricket Stats")
+# Sidebar navigation
+page = st.sidebar.selectbox("📌 Navigate", ["Stats", "Rules"])
 
-# Construct path to stats.csv reliably
-BASE_DIR = os.path.dirname(os.path.dirname(__file__))  # one folder up from pages/
+# Path to CSV
+BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 DATA_PATH = os.path.join(BASE_DIR, "data", "stats.csv")
 
-# Load CSV
-df = pd.read_csv(DATA_PATH)
-
-# Function to assign rank based on ELO
+# Rank function
 def get_rank(elo):
     if elo < 1000:
         return "😵 Get Lost"
@@ -28,25 +26,18 @@ def get_rank(elo):
     else:
         return "👑 Legend"
 
-# Assign ranks
-df["Rank"] = df["ELO"].apply(get_rank)
-
-# Sort by ELO descending
-df = df.sort_values(by="ELO", ascending=False).reset_index(drop=True)
-df["Sl"] = df.index + 1
-
-# Display table
-st.dataframe(
-    df[["Sl", "Abv", "ELO", "Rank"]],
-    use_container_width=True,
-    hide_index=True
-)
-
-# Downloadable CSV
-csv = df.to_csv(index=False).encode('utf-8')
-st.download_button(
-    label="📥 Download Stats CSV",
-    data=csv,
-    file_name='hc_stats.csv',
-    mime='text/csv'
-)
+# Page content
+if page == "Stats":
+    st.title("📊 Handcricket Stats")
+    df = pd.read_csv(DATA_PATH)
+    df["Rank"] = df["ELO"].apply(get_rank)
+    df = df.sort_values(by="ELO", ascending=False).reset_index(drop=True)
+    df["Sl"] = df.index + 1
+    st.dataframe(df[["Sl", "Abv", "ELO", "Rank"]], use_container_width=True, hide_index=True)
+    csv = df.to_csv(index=False).encode('utf-8')
+    st.download_button("📥 Download Stats CSV", csv, "hc_stats.csv", "text/csv")
+elif page == "Rules":
+    import importlib
+    rules_module = importlib.import_module("pages.Rules")
+    rules_module.show_rules()
+    
