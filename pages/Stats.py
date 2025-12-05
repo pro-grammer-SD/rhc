@@ -38,6 +38,6 @@ if page == "Stats":
     st.download_button("📥 Download Stats CSV", csv, "hc_stats.csv", "text/csv")
 elif page == "Rules":
     import importlib
-    rules_module = importlib.import_module("pages.Rules")
+    rules_module = importlib.import_module("Rules")
     rules_module.show_rules()
     
