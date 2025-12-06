@@ -41,7 +41,8 @@ if page == "Stats":
     df["Sl"] = df.index + 1
 
     st.subheader("🏆 Leaderboard")
-    st.dataframe(df[["Sl", "Abv", "ELO", "Rank"]], use_container_width=True, hide_index=True)
+    st.dataframe(df[["Sl", "Abv", "ELO", "Rank"]],
+                 width='stretch', hide_index=True)
 
     st.write("---")
     st.subheader("🛠️ Admin Panel")
@@ -51,8 +52,9 @@ if page == "Stats":
         if st.button("Login"):
             if pwd == st.secrets["ADMIN_KEY"]:
                 st.session_state.admin = True
-                cookies.set("hc_admin_logged_in", "true")
+                cookies["hc_admin_logged_in"] = "true"
                 cookies.save()
+                st.success("Admin Mode Enabled 👑")
                 st.rerun()
             else:
                 st.error("Bruh 💀 Wrong password.")
@@ -62,7 +64,7 @@ if page == "Stats":
         new_df = st.data_editor(
             df[["Abv", "ELO"]],
             num_rows="dynamic",
-            use_container_width=True,
+            width='stretch',
             key="edit_table"
         )
 
@@ -76,7 +78,7 @@ if page == "Stats":
             st.rerun()
 
         if col2.button("Sign Out 🚪"):
-            cookies.set("hc_admin_logged_in", "false")
+            cookies["hc_admin_logged_in"] = "false"
             cookies.save()
             st.session_state.admin = False
             st.rerun()
