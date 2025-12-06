@@ -6,7 +6,8 @@ from st_cookies_manager import CookieManager
 st.set_page_config(page_title="📊 HC Stats", layout="wide")
 
 cookies = CookieManager()
-cookies.get_all()
+if not cookies.ready():
+    st.stop()
 
 page = st.sidebar.selectbox("📌 Navigate", ["Stats", "Rules"])
 
@@ -40,8 +41,7 @@ if page == "Stats":
     df["Sl"] = df.index + 1
 
     st.subheader("🏆 Leaderboard")
-    st.dataframe(df[["Sl", "Abv", "ELO", "Rank"]],
-                 use_container_width=True, hide_index=True)
+    st.dataframe(df[["Sl", "Abv", "ELO", "Rank"]], use_container_width=True, hide_index=True)
 
     st.write("---")
     st.subheader("🛠️ Admin Panel")
@@ -52,11 +52,10 @@ if page == "Stats":
             if pwd == st.secrets["ADMIN_KEY"]:
                 st.session_state.admin = True
                 cookies.set("hc_admin_logged_in", "true")
-                st.success("Admin Mode Enabled 👑")
+                cookies.save()
                 st.rerun()
             else:
                 st.error("Bruh 💀 Wrong password.")
-
     else:
         st.success("Admin Mode Enabled 👑")
 
@@ -77,7 +76,8 @@ if page == "Stats":
             st.rerun()
 
         if col2.button("Sign Out 🚪"):
-            cookies.delete("hc_admin_logged_in")
+            cookies.set("hc_admin_logged_in", "false")
+            cookies.save()
             st.session_state.admin = False
             st.rerun()
             
