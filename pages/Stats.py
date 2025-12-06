@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
-from streamlit_cookie_manager import CookieManager
+from st_cookies_manager import CookieManager
 
 st.set_page_config(page_title="📊 HC Stats", layout="wide")
 
