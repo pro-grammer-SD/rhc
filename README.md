@@ -4,7 +4,6 @@ A fun, friendly **Ranked Handcricket** stats tracker between us school friends!
 
 - 🏆 Tracks player ELOs and ranks automatically  
 - 📊 Stats updated daily  
-- 🎮 Shows Player of the Match (POTM)  
 - 📥 Download CSV of current stats anytime  
 - 📱 Fully responsive for mobile, tablet, and desktop  
 
