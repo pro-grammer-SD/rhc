@@ -14,7 +14,8 @@ A fun, friendly **Ranked Handcricket** stats tracker between us school friends!
 - Misconduct penalties reflected in ELOs  
 - Team ELO calculated from players’ ELOs  
 - Sortable, uneditable stats table  
-
+- Only Admin (me) can edit.
+- 
 ## How to Run
 
 1. Clone this repo  
