@@ -104,7 +104,7 @@ if page == "Stats":
 # ---- RULES PAGE ----
 elif page == "Rules":
     try:
-        rules_module = importlib.import_module("pages.Rules")
+        rules_module = importlib.import_module("Rules")
         rules_module.show_rules()
     except Exception as e:
         st.error(f"Failed to load Rules page. Check pages/Rules.py\n\n{e}")
