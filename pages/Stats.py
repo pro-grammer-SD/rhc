@@ -1,8 +1,12 @@
 import streamlit as st
 import pandas as pd
 import os
+from streamlit_cookie_manager import CookieManager
 
 st.set_page_config(page_title="📊 HC Stats", layout="wide")
+
+cookies = CookieManager()
+cookies.get_all()
 
 page = st.sidebar.selectbox("📌 Navigate", ["Stats", "Rules"])
 
@@ -23,20 +27,21 @@ def get_rank(elo):
     else:
         return "👑 Legend"
 
+if "admin" not in st.session_state:
+    admin_cookie = cookies.get("hc_admin_logged_in")
+    st.session_state.admin = (admin_cookie == "true")
+
 if page == "Stats":
     st.title("📊 Handcricket Stats")
 
     df = pd.read_csv(DATA_PATH)
-
     df["Rank"] = df["ELO"].apply(get_rank)
     df = df.sort_values(by="ELO", ascending=False).reset_index(drop=True)
     df["Sl"] = df.index + 1
 
     st.subheader("🏆 Leaderboard")
-    st.dataframe(df[["Sl", "Abv", "ELO", "Rank"]], use_container_width=True, hide_index=True)
-
-    if "admin" not in st.session_state:
-        st.session_state.admin = False
+    st.dataframe(df[["Sl", "Abv", "ELO", "Rank"]],
+                 use_container_width=True, hide_index=True)
 
     st.write("---")
     st.subheader("🛠️ Admin Panel")
@@ -46,27 +51,33 @@ if page == "Stats":
         if st.button("Login"):
             if pwd == st.secrets["ADMIN_KEY"]:
                 st.session_state.admin = True
-                st.success("Admin Mode Enabled 🚀")
+                cookies.set("hc_admin_logged_in", "true")
+                st.success("Admin Mode Enabled 👑")
                 st.rerun()
             else:
-                st.error("Access Denied 💀")
-    else:
-        st.success("You are in Admin Mode 👑")
+                st.error("Bruh 💀 Wrong password.")
 
-        editable_df = df[["Abv", "ELO"]]  # editable columns only
+    else:
+        st.success("Admin Mode Enabled 👑")
 
         new_df = st.data_editor(
-            editable_df,
+            df[["Abv", "ELO"]],
             num_rows="dynamic",
             use_container_width=True,
-            key="editing_table"
+            key="edit_table"
         )
 
-        if st.button("Save Changes 💾"):
+        col1, col2 = st.columns(2)
+
+        if col1.button("Save Changes 💾"):
             df["Abv"] = new_df["Abv"]
             df["ELO"] = new_df["ELO"]
-
             df.to_csv(DATA_PATH, index=False)
             st.success("Updated Successfully ✔️")
+            st.rerun()
+
+        if col2.button("Sign Out 🚪"):
+            cookies.delete("hc_admin_logged_in")
+            st.session_state.admin = False
             st.rerun()
             
