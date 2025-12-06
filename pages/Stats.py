@@ -3,6 +3,15 @@ import pandas as pd
 import os
 from st_cookies_manager import CookieManager
 
+# ---- HIDE STREAMLIT UI ELEMENTS ----
+st.markdown("""
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    </style>
+""", unsafe_allow_html=True)
+
 st.set_page_config(page_title="📊 HC Stats", layout="wide")
 
 cookies = CookieManager()
@@ -28,21 +37,27 @@ def get_rank(elo):
     else:
         return "👑 Legend"
 
+# ---- ADMIN STATE ----
 if "admin" not in st.session_state:
     admin_cookie = cookies.get("hc_admin_logged_in")
     st.session_state.admin = (admin_cookie == "true")
 
+# ---- STATS PAGE ----
 if page == "Stats":
     st.title("📊 Handcricket Stats")
 
-    df = pd.read_csv(DATA_PATH)
-    df["Rank"] = df["ELO"].apply(get_rank)
+    # Load CSV
+    if os.path.exists(DATA_PATH):
+        df = pd.read_csv(DATA_PATH)
+    else:
+        df = pd.DataFrame(columns=["Abv", "ELO"])
+
+    df["Rank"] = df["ELO"].apply(lambda x: get_rank(x) if pd.notnull(x) else "😵 Get Lost")
     df = df.sort_values(by="ELO", ascending=False).reset_index(drop=True)
     df["Sl"] = df.index + 1
 
     st.subheader("🏆 Leaderboard")
-    st.dataframe(df[["Sl", "Abv", "ELO", "Rank"]],
-                 width='stretch', hide_index=True)
+    st.dataframe(df[["Sl", "Abv", "ELO", "Rank"]], width='stretch', hide_index=True)
 
     st.write("---")
     st.subheader("🛠️ Admin Panel")
@@ -61,6 +76,7 @@ if page == "Stats":
     else:
         st.success("Admin Mode Enabled 👑")
 
+        # Editable table with dynamic rows
         new_df = st.data_editor(
             df[["Abv", "ELO"]],
             num_rows="dynamic",
@@ -70,13 +86,19 @@ if page == "Stats":
 
         col1, col2 = st.columns(2)
 
+        # Save changes permanently
         if col1.button("Save Changes 💾"):
+            # Add new rows if any
+            for idx, row in new_df.iterrows():
+                if row["Abv"] not in df["Abv"].values:
+                    df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
             df["Abv"] = new_df["Abv"]
-            df["ELO"] = new_df["ELO"]
+            df["ELO"] = new_df["ELO"].fillna(1000)  # default ELO if left blank
             df.to_csv(DATA_PATH, index=False)
             st.success("Updated Successfully ✔️")
             st.rerun()
 
+        # Sign out admin
         if col2.button("Sign Out 🚪"):
             cookies["hc_admin_logged_in"] = "false"
             cookies.save()
