@@ -25,29 +25,48 @@ def get_rank(elo):
 
 if page == "Stats":
     st.title("📊 Handcricket Stats")
+
     df = pd.read_csv(DATA_PATH)
+
     df["Rank"] = df["ELO"].apply(get_rank)
     df = df.sort_values(by="ELO", ascending=False).reset_index(drop=True)
     df["Sl"] = df.index + 1
 
+    st.subheader("🏆 Leaderboard")
     st.dataframe(df[["Sl", "Abv", "ELO", "Rank"]], use_container_width=True, hide_index=True)
 
     if "admin" not in st.session_state:
         st.session_state.admin = False
 
-    with st.expander("🛠️ Admin Controls"):
-        if not st.session_state.admin:
-            pwd = st.text_input("Enter Admin Passcode 🔐", type="password")
-            if st.button("Login"):
-                if pwd == st.secrets["ADMIN_KEY"]:
-                    st.session_state.admin = True
-                    st.success("Admin Mode Enabled 🚀")
-                else:
-                    st.error("Access Denied 💀")
-        else:
-            edited_df = st.data_editor(df[["Abv", "ELO"]], num_rows="dynamic")
-            if st.button("Save"):
-                df["ELO"] = edited_df["ELO"]
-                df.to_csv(DATA_PATH, index=False)
-                st.success("Stats Updated 🎯")
-                
+    st.write("---")
+    st.subheader("🛠️ Admin Panel")
+
+    if not st.session_state.admin:
+        pwd = st.text_input("Enter Admin Passcode 🔐", type="password")
+        if st.button("Login"):
+            if pwd == st.secrets["ADMIN_KEY"]:
+                st.session_state.admin = True
+                st.success("Admin Mode Enabled 🚀")
+                st.rerun()
+            else:
+                st.error("Access Denied 💀")
+    else:
+        st.success("You are in Admin Mode 👑")
+
+        editable_df = df[["Abv", "ELO"]]  # editable columns only
+
+        new_df = st.data_editor(
+            editable_df,
+            num_rows="dynamic",
+            use_container_width=True,
+            key="editing_table"
+        )
+
+        if st.button("Save Changes 💾"):
+            df["Abv"] = new_df["Abv"]
+            df["ELO"] = new_df["ELO"]
+
+            df.to_csv(DATA_PATH, index=False)
+            st.success("Updated Successfully ✔️")
+            st.rerun()
+            
