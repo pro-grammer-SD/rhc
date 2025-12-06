@@ -1,24 +1,20 @@
 import streamlit as st
 import pandas as pd
 import os
-import importlib
 from st_cookies_manager import CookieManager
+import importlib
 
 st.set_page_config(page_title="📊 HC Stats", layout="wide")
 
-# ---- COOKIE MANAGER ----
 cookies = CookieManager()
 if not cookies.ready():
     st.stop()
 
-# ---- NAVIGATION ----
 page = st.sidebar.selectbox("📌 Navigate", ["Stats", "Rules"])
 
-# ---- PATHS ----
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 DATA_PATH = os.path.join(BASE_DIR, "data", "stats.csv")
 
-# ---- HELPER FUNCTION ----
 def get_rank(elo):
     if elo < 1000:
         return "😵 Get Lost"
@@ -42,7 +38,7 @@ if "admin" not in st.session_state:
 if page == "Stats":
     st.title("📊 Handcricket Stats")
 
-    # Load CSV or create empty
+    # Load CSV
     if os.path.exists(DATA_PATH):
         df = pd.read_csv(DATA_PATH)
     else:
@@ -53,7 +49,8 @@ if page == "Stats":
     df["Sl"] = df.index + 1
 
     st.subheader("🏆 Leaderboard")
-    st.dataframe(df[["Sl", "Abv", "ELO", "Rank"]], width='stretch', hide_index=True)
+    st.dataframe(df[["Sl", "Abv", "ELO", "Rank"]],
+                 width='stretch', hide_index=True)
 
     st.write("---")
     st.subheader("🛠️ Admin Panel")
@@ -72,7 +69,7 @@ if page == "Stats":
     else:
         st.success("Admin Mode Enabled 👑")
 
-        # Editable table with dynamic rows
+        # Editable table with add/delete
         new_df = st.data_editor(
             df[["Abv", "ELO"]],
             num_rows="dynamic",
@@ -84,12 +81,8 @@ if page == "Stats":
 
         # Save changes permanently
         if col1.button("Save Changes 💾"):
-            # Add new rows if any
-            for idx, row in new_df.iterrows():
-                if row["Abv"] not in df["Abv"].values:
-                    df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
-            df["Abv"] = new_df["Abv"]
-            df["ELO"] = new_df["ELO"].fillna(1000)  # default ELO if left blank
+            new_df["ELO"] = new_df["ELO"].fillna(1000)  # default ELO if left blank
+            df = new_df.copy()  # overwrites df; deleted rows disappear
             df.to_csv(DATA_PATH, index=False)
             st.success("Updated Successfully ✔️")
             st.rerun()
