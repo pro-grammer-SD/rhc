@@ -24,15 +24,26 @@ def load_players():
 def save_players(df):
     sb.table("players").delete().neq("abv","").execute()
     df = df.fillna("")  # replace NaNs
+
     for _, r in df.iterrows():
-        abv = str(r["abv"]).strip()
+        abv_raw = r["abv"]
+
+        # If abv is a list, join it into a string
+        if isinstance(abv_raw, list):
+            abv = " ".join(map(str, abv_raw)).strip()
+        else:
+            abv = str(abv_raw).strip()
+
+        if not abv:
+            abv = "Unknown"  # default if empty
+
         try:
             elo = int(r["elo"])
         except:
-            elo = 1000  # default ELO if conversion fails
-        if abv:
-            sb.table("players").insert({"abv": abv, "elo": elo}).execute()
+            elo = 1000
 
+        sb.table("players").insert({"abv": abv, "elo": elo}).execute()
+        
 def load_teams():
     data = sb.table("teams").select("*").execute()
     df = pd.DataFrame(data.data) if data.data else pd.DataFrame(columns=["team","players","elo"])
