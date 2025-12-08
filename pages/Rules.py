@@ -14,7 +14,7 @@ def show_rules():
         "9000+ → 👑 Legend",
         "🏃‍♂️ Runs scored between r and r+10 → + (r+10) ELO points.",
         "😈 Misconduct by a player → -500 ELO.",
-        "💥 Misconduct by a single team player → team ELO -1000.",
+        "~~💥 Misconduct by a single team player → team ELO -1000.~~ (*removed due to the need of more calculations*).",
         "🙅‍♂️ No passes allowed in batting, unless the player is unwell.",
         "🎯 Each wicket taken → +20 ELO.",
         "⛔ No 6-limit matches allowed. Only 10-limit matches.",
