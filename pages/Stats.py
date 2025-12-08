@@ -24,6 +24,15 @@ styles = {
 }
 page = st_navbar(pages, styles=styles)
 
+# -------------- Hiding Unimportant Stuff ------------
+hide_streamlit_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            </style>
+            """
+st.markdown(hide_streamlit_style, unsafe_allow_html=True) 
+
 # ---------------- Supabase & Cookies ----------------
 cookies = CookieManager()
 if not cookies.ready():
