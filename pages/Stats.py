@@ -18,20 +18,29 @@ sb: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def load_players():
     data = sb.table("players").select("*").execute()
-    return pd.DataFrame(data.data) if data.data else pd.DataFrame(columns=["abv","elo"])
+    df = pd.DataFrame(data.data) if data.data else pd.DataFrame(columns=["abv","elo"])
+    return df
 
 def save_players(df):
     sb.table("players").delete().neq("abv","").execute()
+    df = df.fillna("")  # replace NaNs
     for _, r in df.iterrows():
-        sb.table("players").insert({"abv": r["abv"], "elo": int(r["elo"])}).execute()
+        abv = str(r["abv"]).strip()
+        try:
+            elo = int(r["elo"])
+        except:
+            elo = 1000  # default ELO if conversion fails
+        if abv:
+            sb.table("players").insert({"abv": abv, "elo": elo}).execute()
 
 def load_teams():
     data = sb.table("teams").select("*").execute()
-    return pd.DataFrame(data.data) if data.data else pd.DataFrame(columns=["team","players","elo"])
+    df = pd.DataFrame(data.data) if data.data else pd.DataFrame(columns=["team","players","elo"])
+    return df
 
 def save_team(name, players, elo):
     sb.table("teams").insert({
-        "team": name,
+        "team": name.strip(),
         "players": ",".join(players),
         "elo": int(elo)
     }).execute()
@@ -53,7 +62,6 @@ page = st.sidebar.selectbox("📌 Navigate", ["Stats","Teams","Admin"])
 # ==================== 📊 Stats Page ====================
 if page == "Stats":
     st.title("📊 Player Leaderboard")
-
     df = load_players()
     if df.empty:
         st.info("No players yet 😭")
@@ -68,11 +76,9 @@ if page == "Stats":
         ["All","😵 Get Lost","🟢 Newbie","🔵 Pro","🟣 Hacker","🏅 God","👑 Legend"])
 
     result = df.copy()
-
     if search:
         q = search.lower()
         result = result[result["abv"].str.lower().str.contains(q)]
-
     if rank_filter != "All":
         result = result[result["Rank"] == rank_filter]
 
@@ -81,7 +87,6 @@ if page == "Stats":
 # ==================== 👥 Teams Tab ====================
 elif page == "Teams":
     st.title("👥 Team Builder & Leaderboard")
-
     players = load_players()
     if players.empty:
         st.error("Add players first 💀")
@@ -89,11 +94,9 @@ elif page == "Teams":
 
     team_name = st.text_input("Team Name")
     chosen = st.multiselect("Pick Players", players["abv"].tolist())
-
     if chosen:
         team_elo = int(players.set_index("abv").loc[chosen]["elo"].mean())
         st.metric("Avg Team ELO", team_elo)
-
         if st.button("Save Team 💾"):
             if not team_name.strip():
                 st.error("Team needs a name bruv")
@@ -104,7 +107,6 @@ elif page == "Teams":
 
     st.write("----")
     st.subheader("🏆 Team Leaderboard")
-
     teams = load_teams()
     if not teams.empty:
         teams = teams.sort_values("elo", ascending=False).reset_index(drop=True)
@@ -116,7 +118,6 @@ elif page == "Teams":
 # ==================== 👑 Admin Page ====================
 elif page == "Admin":
     st.title("👑 Admin Control")
-
     if not st.session_state.admin:
         pwd = st.text_input("Passcode", type="password")
         if st.button("Login"):
@@ -132,12 +133,10 @@ elif page == "Admin":
         st.success("Admin Mode On 🔥")
         df = load_players()
         new_df = st.data_editor(df, num_rows="dynamic", width="stretch")
-
         if st.button("Save Players 💾"):
             save_players(new_df)
             st.success("Saved ✔️")
             st.rerun()
-
         if st.button("Logout 🚪"):
             cookies["hc_admin_logged_in"] = "false"
             cookies.save()
