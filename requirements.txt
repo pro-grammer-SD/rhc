@@ -1,3 +1,4 @@
+pandas
 streamlit
 st-cookies-manager
-pandas
+supabase
