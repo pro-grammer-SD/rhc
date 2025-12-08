@@ -3,6 +3,7 @@ import pandas as pd
 import os
 from supabase import create_client, Client
 from st_cookies_manager import CookieManager
+import importlib
 
 st.set_page_config(page_title="📊 HC Stats", layout="wide")
 
@@ -18,40 +19,32 @@ sb: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def load_players():
     data = sb.table("players").select("*").execute()
-    df = pd.DataFrame(data.data) if data.data else pd.DataFrame(columns=["abv","elo"])
-    return df
+    return pd.DataFrame(data.data) if data.data else pd.DataFrame(columns=["abv","elo"])
 
 def save_players(df):
     sb.table("players").delete().neq("abv","").execute()
     df = df.fillna("")  # replace NaNs
-
     for _, r in df.iterrows():
         abv_raw = r["abv"]
-
-        # If abv is a list, join it into a string
         if isinstance(abv_raw, list):
             abv = " ".join(map(str, abv_raw)).strip()
         else:
             abv = str(abv_raw).strip()
-
         if not abv:
-            abv = "Unknown"  # default if empty
-
+            abv = "Unknown"
         try:
             elo = int(r["elo"])
         except:
             elo = 1000
-
         sb.table("players").insert({"abv": abv, "elo": elo}).execute()
-        
+
 def load_teams():
     data = sb.table("teams").select("*").execute()
-    df = pd.DataFrame(data.data) if data.data else pd.DataFrame(columns=["team","players","elo"])
-    return df
+    return pd.DataFrame(data.data) if data.data else pd.DataFrame(columns=["team","players","elo"])
 
 def save_team(name, players, elo):
     sb.table("teams").insert({
-        "team": name.strip(),
+        "team": name,
         "players": ",".join(players),
         "elo": int(elo)
     }).execute()
@@ -68,41 +61,37 @@ if "admin" not in st.session_state:
     admin_cookie = cookies.get("hc_admin_logged_in")
     st.session_state.admin = (admin_cookie == "true")
 
-page = st.sidebar.selectbox("📌 Navigate", ["Stats","Teams","Admin"])
+page = st.sidebar.selectbox("📌 Navigate", ["Stats","Teams","Admin","Rules"])
 
-# ==================== 📊 Stats Page ====================
+# ==================== Stats Page ====================
 if page == "Stats":
     st.title("📊 Player Leaderboard")
     df = load_players()
     if df.empty:
         st.info("No players yet 😭")
         st.stop()
-
     df["Rank"] = df["elo"].apply(get_rank)
     df = df.sort_values(by="elo", ascending=False).reset_index(drop=True)
     df["Sl"] = df.index + 1
 
-    search = st.text_input("🔍 Search Player", key="search")
+    st.text_input("🔍 Search Player", key="search")
     rank_filter = st.selectbox("Filter by Rank", 
         ["All","😵 Get Lost","🟢 Newbie","🔵 Pro","🟣 Hacker","🏅 God","👑 Legend"])
-
     result = df.copy()
-    if search:
-        q = search.lower()
+    if st.session_state.search:
+        q = st.session_state.search.lower()
         result = result[result["abv"].str.lower().str.contains(q)]
     if rank_filter != "All":
         result = result[result["Rank"] == rank_filter]
-
     st.dataframe(result[["Sl","abv","elo","Rank"]], width="stretch", hide_index=True)
 
-# ==================== 👥 Teams Tab ====================
+# ==================== Teams Page ====================
 elif page == "Teams":
     st.title("👥 Team Builder & Leaderboard")
     players = load_players()
     if players.empty:
         st.error("Add players first 💀")
         st.stop()
-
     team_name = st.text_input("Team Name")
     chosen = st.multiselect("Pick Players", players["abv"].tolist())
     if chosen:
@@ -115,7 +104,6 @@ elif page == "Teams":
                 save_team(team_name, chosen, team_elo)
                 st.success("Saved 🎯")
                 st.rerun()
-
     st.write("----")
     st.subheader("🏆 Team Leaderboard")
     teams = load_teams()
@@ -126,7 +114,7 @@ elif page == "Teams":
     else:
         st.info("No teams saved yet 🫠")
 
-# ==================== 👑 Admin Page ====================
+# ==================== Admin Page ====================
 elif page == "Admin":
     st.title("👑 Admin Control")
     if not st.session_state.admin:
@@ -153,4 +141,13 @@ elif page == "Admin":
             cookies.save()
             st.session_state.admin = False
             st.rerun()
-            
+
+# ==================== Rules Page ====================
+elif page == "Rules":
+    st.title("📜 Game Rules")
+    try:
+        rules_module = importlib.import_module("Rules")
+        rules_module.show_rules()
+    except Exception as e:
+        st.error(f"Failed to load Rules page. Check Rules.py\n\n{e}")
+        
