@@ -38,23 +38,13 @@ st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 components.html("""
 <script>
 (function() {
-    // Find all divs
-    const allDivs = document.querySelectorAll('div');
+    // Remove badge <a> that contains Streamlit Cloud link
+    const badges = document.querySelectorAll('a[href*="streamlit.io/cloud"]');
+    badges.forEach(b => b.remove());
 
-    allDivs.forEach(div => {
-        const txt = div.innerText || "";
-        // Regex match "Created by" and "Hosted with Streamlit"
-        if (/Created by.*Hosted with Streamlit/i.test(txt)) {
-            div.remove();  // remove the container entirely
-        }
-        // Also remove any image/avatar inside it if needed
-        const imgs = div.querySelectorAll('img');
-        imgs.forEach(img => {
-            if (txt.includes("Created by") || txt.includes("Hosted with Streamlit")) {
-                img.remove();
-            }
-        });
-    });
+    // Remove div with creator avatar/profile
+    const profiles = document.querySelectorAll('div._profileContainer_gzau3_53');
+    profiles.forEach(p => p.remove());
 })();
 </script>
 """, height=0, width=0)
