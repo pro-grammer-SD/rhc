@@ -5,7 +5,6 @@ from supabase import create_client, Client
 from st_cookies_manager import CookieManager
 import importlib
 from streamlit_navigation_bar import st_navbar
-import streamlit.components.v1 as components
 
 st.set_page_config(page_title="📊 HC Stats", layout="wide", initial_sidebar_state="collapsed")
 
@@ -33,28 +32,6 @@ hide_streamlit_style = """
             </style>
             """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True) 
-
-# Inject JS to target the exact text & avatar container
-components.html("""
-<script>
-(function() {
-    const interval = setInterval(() => {
-        // Remove Streamlit badge
-        const badges = document.querySelectorAll('a[href*="streamlit.io/cloud"]');
-        badges.forEach(b => b.remove());
-
-        // Remove creator avatar/profile
-        const profiles = document.querySelectorAll('div._profileContainer_gzau3_53');
-        profiles.forEach(p => p.remove());
-
-        // Stop interval if both are gone
-        if (badges.length === 0 && profiles.length === 0) {
-            clearInterval(interval);
-        }
-    }, 100); // check every 100ms
-})();
-</script>
-""", height=0, width=0)
 
 # ---------------- Supabase & Cookies ----------------
 cookies = CookieManager()
