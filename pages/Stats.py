@@ -38,13 +38,20 @@ st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 components.html("""
 <script>
 (function() {
-    // Remove badge <a> that contains Streamlit Cloud link
-    const badges = document.querySelectorAll('a[href*="streamlit.io/cloud"]');
-    badges.forEach(b => b.remove());
+    const interval = setInterval(() => {
+        // Remove Streamlit badge
+        const badges = document.querySelectorAll('a[href*="streamlit.io/cloud"]');
+        badges.forEach(b => b.remove());
 
-    // Remove div with creator avatar/profile
-    const profiles = document.querySelectorAll('div._profileContainer_gzau3_53');
-    profiles.forEach(p => p.remove());
+        // Remove creator avatar/profile
+        const profiles = document.querySelectorAll('div._profileContainer_gzau3_53');
+        profiles.forEach(p => p.remove());
+
+        // Stop interval if both are gone
+        if (badges.length === 0 && profiles.length === 0) {
+            clearInterval(interval);
+        }
+    }, 100); // check every 100ms
 })();
 </script>
 """, height=0, width=0)
