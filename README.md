@@ -22,4 +22,9 @@ A fun, friendly **Ranked Handcricket** stats tracker between us school friends!
 2. Install requirements:
    ```bash
    pip install -r requirements.txt
+3. Run using Streamlit:
+   ```bash
+   cd pages
+   streamlit run Stats.py
+   ```
    
