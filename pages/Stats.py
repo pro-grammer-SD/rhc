@@ -5,6 +5,7 @@ from supabase import create_client, Client
 from st_cookies_manager import CookieManager
 import importlib
 from streamlit_navigation_bar import st_navbar
+import streamlit.components.v1 as components
 
 st.set_page_config(page_title="📊 HC Stats", layout="wide", initial_sidebar_state="collapsed")
 
@@ -32,6 +33,31 @@ hide_streamlit_style = """
             </style>
             """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True) 
+
+# Inject JS to target the exact text & avatar container
+components.html("""
+<script>
+(function() {
+    // Find all divs
+    const allDivs = document.querySelectorAll('div');
+
+    allDivs.forEach(div => {
+        const txt = div.innerText || "";
+        // Regex match "Created by" and "Hosted with Streamlit"
+        if (/Created by.*Hosted with Streamlit/i.test(txt)) {
+            div.remove();  // remove the container entirely
+        }
+        // Also remove any image/avatar inside it if needed
+        const imgs = div.querySelectorAll('img');
+        imgs.forEach(img => {
+            if (txt.includes("Created by") || txt.includes("Hosted with Streamlit")) {
+                img.remove();
+            }
+        });
+    });
+})();
+</script>
+""", height=0, width=0)
 
 # ---------------- Supabase & Cookies ----------------
 cookies = CookieManager()
