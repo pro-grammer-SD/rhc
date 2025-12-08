@@ -4,6 +4,7 @@ import os
 from supabase import create_client, Client
 from st_cookies_manager import CookieManager
 import importlib
+from streamlit_navigation_bar import st_navbar
 
 st.set_page_config(page_title="📊 HC Stats", layout="wide")
 
@@ -23,7 +24,7 @@ def load_players():
 
 def save_players(df):
     sb.table("players").delete().neq("abv","").execute()
-    df = df.fillna("")  # replace NaNs
+    df = df.fillna("")
     for _, r in df.iterrows():
         abv_raw = r["abv"]
         if isinstance(abv_raw, list):
@@ -61,7 +62,8 @@ if "admin" not in st.session_state:
     admin_cookie = cookies.get("hc_admin_logged_in")
     st.session_state.admin = (admin_cookie == "true")
 
-page = st.sidebar.selectbox("📌 Navigate", ["Stats","Teams","Admin","Rules"])
+# ==================== Navbar ====================
+page = st_navbar(["Stats","Teams","Admin","Rules"])
 
 # ==================== Stats Page ====================
 if page == "Stats":
