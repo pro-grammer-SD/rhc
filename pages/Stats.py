@@ -6,8 +6,25 @@ from st_cookies_manager import CookieManager
 import importlib
 from streamlit_navigation_bar import st_navbar
 
-st.set_page_config(page_title="📊 HC Stats", layout="wide")
+st.set_page_config(page_title="📊 HC Stats", layout="wide", initial_sidebar_state="collapsed")
 
+# ---------------- Navbar Styling ----------------
+pages = ["Stats","Teams","Admin","Rules"]
+styles = {
+    "nav": {"background-color": "rgb(255, 179, 102)"},
+    "div": {"max-width": "32rem"},
+    "span": {
+        "border-radius": "0.5rem",
+        "color": "rgb(49, 51, 63)",
+        "margin": "0 0.125rem",
+        "padding": "0.4375rem 0.625rem",
+    },
+    "active": {"background-color": "rgba(255, 255, 255, 0.25)"},
+    "hover": {"background-color": "rgba(255, 255, 255, 0.35)"},
+}
+page = st_navbar(pages, styles=styles)
+
+# ---------------- Supabase & Cookies ----------------
 cookies = CookieManager()
 if not cookies.ready():
     st.stop()
@@ -18,6 +35,11 @@ ADMIN_KEY = os.getenv("ADMIN_KEY")
 
 sb: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+if "admin" not in st.session_state:
+    admin_cookie = cookies.get("hc_admin_logged_in")
+    st.session_state.admin = (admin_cookie == "true")
+
+# ---------------- Helper Functions ----------------
 def load_players():
     data = sb.table("players").select("*").execute()
     return pd.DataFrame(data.data) if data.data else pd.DataFrame(columns=["abv","elo"])
@@ -27,10 +49,7 @@ def save_players(df):
     df = df.fillna("")
     for _, r in df.iterrows():
         abv_raw = r["abv"]
-        if isinstance(abv_raw, list):
-            abv = " ".join(map(str, abv_raw)).strip()
-        else:
-            abv = str(abv_raw).strip()
+        abv = " ".join(map(str, abv_raw)).strip() if isinstance(abv_raw, list) else str(abv_raw).strip()
         if not abv:
             abv = "Unknown"
         try:
@@ -58,14 +77,7 @@ def get_rank(elo):
     if elo < 9000: return "🏅 God"
     return "👑 Legend"
 
-if "admin" not in st.session_state:
-    admin_cookie = cookies.get("hc_admin_logged_in")
-    st.session_state.admin = (admin_cookie == "true")
-
-# ==================== Navbar ====================
-page = st_navbar(["Stats","Teams","Admin","Rules"])
-
-# ==================== Stats Page ====================
+# ---------------- Pages ----------------
 if page == "Stats":
     st.title("📊 Player Leaderboard")
     df = load_players()
@@ -77,8 +89,7 @@ if page == "Stats":
     df["Sl"] = df.index + 1
 
     st.text_input("🔍 Search Player", key="search")
-    rank_filter = st.selectbox("Filter by Rank", 
-        ["All","😵 Get Lost","🟢 Newbie","🔵 Pro","🟣 Hacker","🏅 God","👑 Legend"])
+    rank_filter = st.selectbox("Filter by Rank", ["All","😵 Get Lost","🟢 Newbie","🔵 Pro","🟣 Hacker","🏅 God","👑 Legend"])
     result = df.copy()
     if st.session_state.search:
         q = st.session_state.search.lower()
@@ -87,7 +98,6 @@ if page == "Stats":
         result = result[result["Rank"] == rank_filter]
     st.dataframe(result[["Sl","abv","elo","Rank"]], width="stretch", hide_index=True)
 
-# ==================== Teams Page ====================
 elif page == "Teams":
     st.title("👥 Team Builder & Leaderboard")
     players = load_players()
@@ -116,7 +126,6 @@ elif page == "Teams":
     else:
         st.info("No teams saved yet 🫠")
 
-# ==================== Admin Page ====================
 elif page == "Admin":
     st.title("👑 Admin Control")
     if not st.session_state.admin:
@@ -144,7 +153,6 @@ elif page == "Admin":
             st.session_state.admin = False
             st.rerun()
 
-# ==================== Rules Page ====================
 elif page == "Rules":
     try:
         rules_module = importlib.import_module("Rules")
