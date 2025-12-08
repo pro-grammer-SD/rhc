@@ -144,7 +144,6 @@ elif page == "Admin":
 
 # ==================== Rules Page ====================
 elif page == "Rules":
-    st.title("📜 Game Rules")
     try:
         rules_module = importlib.import_module("Rules")
         rules_module.show_rules()
