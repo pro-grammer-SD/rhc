@@ -3,7 +3,6 @@ import pandas as pd
 import os
 from supabase import create_client, Client
 from st_cookies_manager import CookieManager
-import importlib
 
 st.set_page_config(page_title="📊 HC Stats", layout="wide")
 
@@ -26,6 +25,17 @@ def save_players(df):
     for _, r in df.iterrows():
         sb.table("players").insert({"Abv": r["Abv"], "ELO": int(r["ELO"])}).execute()
 
+def load_teams():
+    data = sb.table("teams").select("*").execute()
+    return pd.DataFrame(data.data) if data.data else pd.DataFrame(columns=["Team","Players","ELO"])
+
+def save_team(name, players, elo):
+    sb.table("teams").insert({
+        "Team": name,
+        "Players": ",".join(players),
+        "ELO": int(elo)
+    }).execute()
+
 def get_rank(elo):
     if elo < 1000: return "😵 Get Lost"
     if elo < 3000: return "🟢 Newbie"
@@ -38,65 +48,100 @@ if "admin" not in st.session_state:
     admin_cookie = cookies.get("hc_admin_logged_in")
     st.session_state.admin = (admin_cookie == "true")
 
-page = st.sidebar.selectbox("📌 Navigate", ["Stats","Rules"])
+page = st.sidebar.selectbox("📌 Navigate", ["Stats","Teams","Admin"])
 
+# ==================== 📊 Stats Page ====================
 if page == "Stats":
-    st.title("📊 Handcricket Stats")
+    st.title("📊 Player Leaderboard")
 
     df = load_players()
+    if df.empty:
+        st.info("No players yet 😭")
+        st.stop()
 
-    if not df.empty:
-        df["Rank"] = df["ELO"].apply(get_rank)
-        df = df.sort_values(by="ELO", ascending=False).reset_index(drop=True)
-        df["Sl"] = df.index + 1
+    df["Rank"] = df["ELO"].apply(get_rank)
+    df = df.sort_values(by="ELO", ascending=False).reset_index(drop=True)
+    df["Sl"] = df.index + 1
+
+    st.text_input("🔍 Search Player", key="search")
+
+    rank_filter = st.selectbox("Filter by Rank", 
+        ["All","😵 Get Lost","🟢 Newbie","🔵 Pro","🟣 Hacker","🏅 God","👑 Legend"])
+
+    result = df.copy()
+
+    if st.session_state.search:
+        q = st.session_state.search.lower()
+        result = result[result["Abv"].str.lower().str.contains(q)]
+
+    if rank_filter != "All":
+        result = result[result["Rank"] == rank_filter]
+
+    st.dataframe(result[["Sl","Abv","ELO","Rank"]], width="stretch", hide_index=True)
+
+# ==================== 👥 Teams Tab ====================
+elif page == "Teams":
+    st.title("👥 Team Builder & Leaderboard")
+
+    players = load_players()
+    if players.empty:
+        st.error("Add players first 💀")
+        st.stop()
+
+    team_name = st.text_input("Team Name")
+    chosen = st.multiselect("Pick Players", players["Abv"].tolist())
+
+    if chosen:
+        team_elo = int(players.set_index("Abv").loc[chosen]["ELO"].mean())
+        st.metric("Avg Team ELO", team_elo)
+
+        if st.button("Save Team 💾"):
+            if not team_name.strip():
+                st.error("Team needs a name bruv")
+            else:
+                save_team(team_name, chosen, team_elo)
+                st.success("Saved 🎯")
+                st.rerun()
+
+    st.write("----")
+    st.subheader("🏆 Team Leaderboard")
+
+    teams = load_teams()
+    if not teams.empty:
+        teams = teams.sort_values("ELO", ascending=False).reset_index(drop=True)
+        teams["Sl"] = teams.index + 1
+        st.dataframe(teams[["Sl","Team","Players","ELO"]], width="stretch", hide_index=True)
     else:
-        df = pd.DataFrame(columns=["Sl","Abv","ELO","Rank"])
+        st.info("No teams saved yet 🫠")
 
-    st.subheader("🏆 Leaderboard")
-    st.dataframe(df[["Sl","Abv","ELO","Rank"]], width='stretch', hide_index=True)
-
-    st.write("---")
-    st.subheader("🛠️ Admin Panel")
+# ==================== 👑 Admin Page ====================
+elif page == "Admin":
+    st.title("👑 Admin Control")
 
     if not st.session_state.admin:
-        pwd = st.text_input("Enter Admin Passcode 🔐", type="password")
+        pwd = st.text_input("Passcode", type="password")
         if st.button("Login"):
             if pwd == ADMIN_KEY:
                 st.session_state.admin = True
                 cookies["hc_admin_logged_in"] = "true"
                 cookies.save()
-                st.success("Admin Mode Enabled 👑")
+                st.success("Admin Mode Enabled 🔥")
                 st.rerun()
             else:
-                st.error("Bruh 💀 Wrong password.")
+                st.error("Nah 💀")
     else:
-        st.success("Admin Mode Enabled 👑")
+        st.success("Admin Mode On 🔥")
+        df = load_players()
+        new_df = st.data_editor(df, num_rows="dynamic", width="stretch")
 
-        new_df = st.data_editor(
-            df[["Abv","ELO"]],
-            num_rows="dynamic",
-            width='stretch',
-            key="edit_table"
-        )
-
-        col1, col2 = st.columns(2)
-
-        if col1.button("Save Changes 💾"):
-            new_df["ELO"] = new_df["ELO"].fillna(1000)
+        if st.button("Save Players 💾"):
             save_players(new_df)
-            st.success("Updated Successfully ✔️")
+            st.success("Saved ✔️")
             st.rerun()
 
-        if col2.button("Sign Out 🚪"):
+        if st.button("Logout 🚪"):
             cookies["hc_admin_logged_in"] = "false"
             cookies.save()
             st.session_state.admin = False
             st.rerun()
-
-elif page == "Rules":
-    try:
-        rules_module = importlib.import_module("Rules")
-        rules_module.show_rules()
-    except Exception as e:
-        st.error(f"Failed to load Rules page.\n\n{e}")
-        
+            
