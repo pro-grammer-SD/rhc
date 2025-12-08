@@ -18,22 +18,22 @@ sb: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 def load_players():
     data = sb.table("players").select("*").execute()
-    return pd.DataFrame(data.data) if data.data else pd.DataFrame(columns=["Abv","ELO"])
+    return pd.DataFrame(data.data) if data.data else pd.DataFrame(columns=["abv","elo"])
 
 def save_players(df):
-    sb.table("players").delete().neq("Abv","").execute()
+    sb.table("players").delete().neq("abv","").execute()
     for _, r in df.iterrows():
-        sb.table("players").insert({"Abv": r["Abv"], "ELO": int(r["ELO"])}).execute()
+        sb.table("players").insert({"abv": r["abv"], "elo": int(r["elo"])}).execute()
 
 def load_teams():
     data = sb.table("teams").select("*").execute()
-    return pd.DataFrame(data.data) if data.data else pd.DataFrame(columns=["Team","Players","ELO"])
+    return pd.DataFrame(data.data) if data.data else pd.DataFrame(columns=["team","players","elo"])
 
 def save_team(name, players, elo):
     sb.table("teams").insert({
-        "Team": name,
-        "Players": ",".join(players),
-        "ELO": int(elo)
+        "team": name,
+        "players": ",".join(players),
+        "elo": int(elo)
     }).execute()
 
 def get_rank(elo):
@@ -59,25 +59,24 @@ if page == "Stats":
         st.info("No players yet 😭")
         st.stop()
 
-    df["Rank"] = df["ELO"].apply(get_rank)
-    df = df.sort_values(by="ELO", ascending=False).reset_index(drop=True)
+    df["Rank"] = df["elo"].apply(get_rank)
+    df = df.sort_values(by="elo", ascending=False).reset_index(drop=True)
     df["Sl"] = df.index + 1
 
-    st.text_input("🔍 Search Player", key="search")
-
+    search = st.text_input("🔍 Search Player", key="search")
     rank_filter = st.selectbox("Filter by Rank", 
         ["All","😵 Get Lost","🟢 Newbie","🔵 Pro","🟣 Hacker","🏅 God","👑 Legend"])
 
     result = df.copy()
 
-    if st.session_state.search:
-        q = st.session_state.search.lower()
-        result = result[result["Abv"].str.lower().str.contains(q)]
+    if search:
+        q = search.lower()
+        result = result[result["abv"].str.lower().str.contains(q)]
 
     if rank_filter != "All":
         result = result[result["Rank"] == rank_filter]
 
-    st.dataframe(result[["Sl","Abv","ELO","Rank"]], width="stretch", hide_index=True)
+    st.dataframe(result[["Sl","abv","elo","Rank"]], width="stretch", hide_index=True)
 
 # ==================== 👥 Teams Tab ====================
 elif page == "Teams":
@@ -89,10 +88,10 @@ elif page == "Teams":
         st.stop()
 
     team_name = st.text_input("Team Name")
-    chosen = st.multiselect("Pick Players", players["Abv"].tolist())
+    chosen = st.multiselect("Pick Players", players["abv"].tolist())
 
     if chosen:
-        team_elo = int(players.set_index("Abv").loc[chosen]["ELO"].mean())
+        team_elo = int(players.set_index("abv").loc[chosen]["elo"].mean())
         st.metric("Avg Team ELO", team_elo)
 
         if st.button("Save Team 💾"):
@@ -108,9 +107,9 @@ elif page == "Teams":
 
     teams = load_teams()
     if not teams.empty:
-        teams = teams.sort_values("ELO", ascending=False).reset_index(drop=True)
+        teams = teams.sort_values("elo", ascending=False).reset_index(drop=True)
         teams["Sl"] = teams.index + 1
-        st.dataframe(teams[["Sl","Team","Players","ELO"]], width="stretch", hide_index=True)
+        st.dataframe(teams[["Sl","team","players","elo"]], width="stretch", hide_index=True)
     else:
         st.info("No teams saved yet 🫠")
 
