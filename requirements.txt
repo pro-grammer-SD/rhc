@@ -1,5 +1,6 @@
 pandas
 streamlit
 st-cookies-manager
-streamlit-navigation-bar
+streamlit-community-navigation-bar
+st-theme
 supabase
