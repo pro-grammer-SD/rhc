@@ -9,7 +9,6 @@ import plotly.express as px
 
 st.set_page_config(page_title="📊 HC Stats", layout="wide", initial_sidebar_state="collapsed")
 
-# Navbar
 pages = ["Stats","Teams","Admin","Rules"]
 styles = {
     "nav": {"background-color": "rgb(255, 170, 85)", "padding": "4px 0"},
@@ -27,7 +26,6 @@ styles = {
     "hover": {"background-color": "rgba(255,255,255,0.5)"},
 }
 page = st_navbar(pages, styles=styles)
-
 st.markdown("<style>#MainMenu{display:none;} footer{display:none;}</style>", unsafe_allow_html=True)
 
 cookies = CookieManager()
@@ -53,11 +51,15 @@ def get_rank(elo):
 
 def load_players():
     res = sb.table("players").select("*").execute()
-    return pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["abv","elo"])
+    df = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["abv","elo"])
+    df["elo"] = pd.to_numeric(df["elo"], errors="coerce").fillna(0)
+    return df
 
 def load_teams():
     res = sb.table("teams").select("*").execute()
-    return pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["id","name","elo"])
+    df = pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["id","name","elo"])
+    df["elo"] = pd.to_numeric(df["elo"], errors="coerce").fillna(0)
+    return df
 
 def load_team_players(team_id):
     res = sb.table("team_players").select("player_abv").eq("team_id", team_id).execute()
@@ -68,10 +70,24 @@ def recalc_team_elo(team_id):
     if not players_in_team:
         sb.table("teams").update({"elo": 0}).eq("id", team_id).execute()
         return
-    pl = sb.table("players").select("elo").in_("abv", players_in_team).execute()
-    elos = [p["elo"] for p in (pl.data or [])]
-    new_elo = int(sum(elos) / len(elos)) if elos else 0
+
+    pl_res = sb.table("players").select("abv","elo").in_("abv", players_in_team).execute()
+    pl_data = pl_res.data or []
+    
+    if not pl_data:
+        st.write(f"⚠️ No players found for team {team_id}. Check player ABVs: {players_in_team}")
+        sb.table("teams").update({"elo": 0}).eq("id", team_id).execute()
+        return
+
+    elos = []
+    for p in pl_data:
+        try:
+            elos.append(int(p["elo"]))
+        except:
+            elos.append(0)
+    new_elo = int(sum(elos)/len(elos)) if elos else 0
     sb.table("teams").update({"elo": new_elo}).eq("id", team_id).execute()
+    st.write(f"✅ Team {team_id} ELO recalculated: {new_elo}")
 
 def create_team(name, player_list):
     if not player_list: return
@@ -99,7 +115,11 @@ def update_team(id, name):
 
 def delete_team(team_id):
     sb.table("team_players").delete().eq("team_id", team_id).execute()
-    sb.table("teams").delete().eq("id", team_id).execute()
+    sb.table("teams").delete().eq("team_id", team_id).execute()
+
+def recalc_all_teams():
+    for tid in load_teams()["id"].tolist():
+        recalc_team_elo(tid)
 
 # ---------------------- Pages ----------------------
 if page == "Stats":
@@ -120,9 +140,12 @@ if page == "Stats":
     st.dataframe(r[["#","abv","elo","Rank"]], use_container_width=True, hide_index=True)
 
     st.markdown("### 📈 Player ELO Chart")
-    fig = px.bar(r, x="abv", y="elo", text="elo", labels={"abv":"Player","elo":"ELO"})
-    fig.update_traces(textposition="outside")
-    st.plotly_chart(fig, use_container_width=True)
+    if not r.empty:
+        fig = px.bar(r, x="abv", y="elo", text="elo", labels={"abv":"Player","elo":"ELO"})
+        fig.update_traces(textposition="outside")
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No data to display in chart.")
 
 elif page == "Teams":
     st.title("👥 Teams")
@@ -131,6 +154,7 @@ elif page == "Teams":
         st.error("Add players first")
         st.stop()
 
+    recalc_all_teams()
     t1, t2 = st.tabs(["Create Team","Leaderboard"])
 
     with t1:
@@ -143,9 +167,6 @@ elif page == "Teams":
 
     with t2:
         t = load_teams()
-        for tid in t["id"].tolist():
-            recalc_team_elo(tid)
-        t = load_teams()
         if t.empty:
             st.info("No teams yet")
         else:
@@ -153,25 +174,24 @@ elif page == "Teams":
             t["#"] = t.index + 1
             st.dataframe(t[["#","name","elo"]], use_container_width=True, hide_index=True)
 
-            # Player contributions chart
             st.markdown("### 📊 Team Player Contributions")
-            team_id = st.selectbox("Select Team to View Contributions", t["id"].tolist(),
+            team_id = st.selectbox("Select Team", t["id"].tolist(),
                                    format_func=lambda x: t[t["id"]==x]["name"].iloc[0])
             roster = load_team_players(team_id)
             if roster:
-                pl = sb.table("players").select("abv","elo").in_("abv", roster).execute().data
+                pl = sb.table("players").select("abv","elo").in_("abv", roster).execute().data or []
                 pl_df = pd.DataFrame(pl).sort_values("elo", ascending=False)
-                fig2 = px.bar(pl_df, x="abv", y="elo", text="elo", labels={"abv":"Player","elo":"ELO"})
-                fig2.update_traces(textposition="outside")
-                st.plotly_chart(fig2, use_container_width=True)
+                if not pl_df.empty:
+                    fig2 = px.bar(pl_df, x="abv", y="elo", text="elo", labels={"abv":"Player","elo":"ELO"})
+                    fig2.update_traces(textposition="outside")
+                    st.plotly_chart(fig2, use_container_width=True)
 
-            # Stacked bar for total team ELO
             st.markdown("### 📊 Team Total ELO Breakdown")
             team_data = []
             for tid in t["id"]:
                 roster = load_team_players(tid)
-                pl = sb.table("players").select("abv","elo").in_("abv", roster).execute().data
-                for p in (pl or []):
+                pl = sb.table("players").select("abv","elo").in_("abv", roster).execute().data or []
+                for p in pl:
                     team_data.append({"Team": t[t["id"]==tid]["name"].iloc[0], "Player": p["abv"], "ELO": p["elo"]})
             if team_data:
                 team_df = pd.DataFrame(team_data)
@@ -246,8 +266,7 @@ elif page == "Admin":
     st.divider()
     st.markdown("### 🔄 Global Maintenance")
     if st.button("Recalculate All Team ELOs"):
-        for tid in load_teams()["id"].tolist():
-            recalc_team_elo(tid)
+        recalc_all_teams()
         st.success("All team ELOs refreshed!")
         st.rerun()
 
