@@ -8,7 +8,7 @@ import importlib
 
 st.set_page_config(page_title="📊 HC Stats", layout="wide", initial_sidebar_state="collapsed")
 
-pages = ["Stats","Teams","Admin","Rules"]
+pages = ["Stats", "Teams", "Admin", "Rules"]
 styles = {
     "nav": {"background-color": "rgb(255, 170, 85)", "padding": "4px 0"},
     "div": {"max-width": "100vw"},
@@ -26,7 +26,7 @@ styles = {
 }
 page = st_navbar(pages, styles=styles)
 
-st.markdown("<style>#MainMenu{display:none;} footer{display:none;}</style>", unsafe_allow_html=True)
+st.markdown("<style>#MainMenu{display:none;} footer{display:none;} .css-1n76uvr{padding-bottom:75px;}</style>", unsafe_allow_html=True)
 
 cookies = CookieManager()
 if not cookies.ready():
@@ -40,35 +40,42 @@ sb: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 if "admin" not in st.session_state:
     st.session_state.admin = (cookies.get("hc_admin_logged_in") == "true")
 
+
 def recalc_team_elo(team_id):
     ps = sb.table("team_players").select("player_abv").eq("team_id", team_id).execute().data
     if not ps:
-        sb.table("teams").update({"elo": 0}).eq("id", team_id).execute()
+        sb.table("teams").update({"elo": 1000}).eq("id", team_id).execute()
         return
     abvs = [x["player_abv"] for x in ps]
     pl = sb.table("players").select("elo").in_("abv", abvs).execute().data
     new = int(sum(x["elo"] for x in pl) / len(pl))
     sb.table("teams").update({"elo": new}).eq("id", team_id).execute()
 
+
 def load_players():
-    res = sb.table("players").select("*").execute()
-    return pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["abv","elo"])
+    res = sb.table("players").select("*").order("elo", desc=True).execute()
+    return pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["abv", "elo"])
+
 
 def load_teams():
-    res = sb.table("teams").select("*").execute()
-    return pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["id","name","elo"])
+    res = sb.table("teams").select("*").order("elo", desc=True).execute()
+    return pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["id", "name", "elo"])
+
 
 def load_team_players(team_id):
-    res = sb.table("team_players").select("player_abv").eq("team_id", team_id).execute().data
-    return [x["player_abv"] for x in res] if res else []
+    r = sb.table("team_players").select("player_abv").eq("team_id", team_id).execute().data
+    return [x["player_abv"] for x in r] if r else []
+
 
 def create_team(name, player_list):
-    if not player_list: return
-    res = sb.table("teams").insert({"name": name, "elo": 0}).execute()
+    if not player_list:
+        return
+    res = sb.table("teams").insert({"name": name, "elo": 1000}).execute()
     tid = res.data[0]["id"]
     for p in player_list:
         sb.table("team_players").insert({"team_id": tid, "player_abv": p}).execute()
     recalc_team_elo(tid)
+
 
 def update_player(old, new, elo):
     sb.table("players").update({"abv": new, "elo": elo}).eq("abv", old).execute()
@@ -76,19 +83,23 @@ def update_player(old, new, elo):
     for t in load_teams()["id"].tolist():
         recalc_team_elo(t)
 
+
 def delete_player(abv):
     sb.table("team_players").delete().eq("player_abv", abv).execute()
     sb.table("players").delete().eq("abv", abv).execute()
     for t in load_teams()["id"].tolist():
         recalc_team_elo(t)
 
+
 def update_team(id, name):
     sb.table("teams").update({"name": name}).eq("id", id).execute()
     recalc_team_elo(id)
 
+
 def delete_team(team_id):
     sb.table("team_players").delete().eq("team_id", team_id).execute()
     sb.table("teams").delete().eq("id", team_id).execute()
+
 
 def get_rank(elo):
     if elo < 1000: return "😵 Get Lost"
@@ -98,6 +109,7 @@ def get_rank(elo):
     if elo < 9000: return "🏅 God"
     return "👑 Legend"
 
+
 if page == "Stats":
     st.title("📊 Leaderboard")
     df = load_players()
@@ -105,14 +117,15 @@ if page == "Stats":
         st.info("Add some sweaty players first 😭")
         st.stop()
     df["Rank"] = df["elo"].apply(get_rank)
-    df = df.sort_values("elo", ascending=False).reset_index(drop=True)
+    df = df.reset_index(drop=True)
     df["#"] = df.index + 1
-    q = st.text_input("Search")
+    q = st.text_input("Search Player")
     f = st.selectbox("Rank Filter", ["All"] + df["Rank"].unique().tolist())
     r = df.copy()
     if q: r = r[r["abv"].str.lower().str.contains(q.lower())]
     if f != "All": r = r[r["Rank"] == f]
-    st.dataframe(r[["#","abv","elo","Rank"]], use_container_width=True, hide_index=True)
+    st.dataframe(r[["#", "abv", "elo", "Rank"]], use_container_width=True, hide_index=True)
+
 
 elif page == "Teams":
     st.title("👥 Teams")
@@ -121,12 +134,12 @@ elif page == "Teams":
         st.error("Add players lol")
         st.stop()
 
-    t1, t2 = st.tabs(["Create Team","Leaderboard"])
+    t1, t2 = st.tabs(["Create Team", "Leaderboard"])
 
     with t1:
         name = st.text_input("Team Name")
         chosen = st.multiselect("Players", players["abv"].tolist())
-        if st.button("Save") and name and chosen:
+        if st.button("Save Team") and name and chosen:
             create_team(name, chosen)
             st.rerun()
 
@@ -135,12 +148,12 @@ elif page == "Teams":
         if t.empty:
             st.info("Where teams?")
         else:
-            t = t.sort_values("elo", ascending=False).reset_index(drop=True)
-            t["#"] = t.index + 1
-            st.dataframe(t[["#","name","elo"]], use_container_width=True, hide_index=True)
+            t["#"] = range(1, len(t) + 1)
+            st.dataframe(t[["#", "name", "elo"]], use_container_width=True, hide_index=True)
+
 
 elif page == "Admin":
-    st.title("🔑 Admin")
+    st.title("🔑 Admin Panel")
     if not st.session_state.admin:
         pwd = st.text_input("Key", type="password")
         if st.button("Login") and pwd == ADMIN_KEY:
@@ -152,11 +165,11 @@ elif page == "Admin":
 
     df = load_players()
     st.subheader("Players")
-    sel = st.selectbox("Player", df["abv"].tolist()) if not df.empty else None
-    if sel:
-        new_abv = st.text_input("Rename", sel)
-        new_elo = st.number_input("Elo", value=int(df[df["abv"]==sel]["elo"].iloc[0]))
-        if st.button("Update Player"):
+    if not df.empty:
+        sel = st.selectbox("Select Player", df["abv"].tolist())
+        new_abv = st.text_input("Rename Player", sel)
+        new_elo = st.number_input("Update Elo", value=int(df[df["abv"] == sel]["elo"].iloc[0]))
+        if st.button("Save Player"):
             update_player(sel, new_abv, new_elo)
             st.rerun()
         if st.button("Delete Player"):
@@ -167,24 +180,24 @@ elif page == "Admin":
     st.subheader("Teams")
     t = load_teams()
     if not t.empty:
-        sel_team = st.selectbox("Team", t["name"].tolist())
+        sel_team = st.selectbox("Select Team", t["name"].tolist())
         row = t[t["name"] == sel_team].iloc[0]
         tid = row["id"]
         new_name = st.text_input("Rename Team", row["name"])
-        if st.button("Update Team"):
+        if st.button("Save Team"):
             update_team(tid, new_name)
             st.rerun()
 
         roster = load_team_players(tid)
-        add = st.selectbox("Add Player", [p for p in df["abv"].tolist() if p not in roster])
-        if st.button("Add"):
+        add = st.selectbox("Add Player to Team", [p for p in df["abv"].tolist() if p not in roster])
+        if st.button("Add Player"):
             sb.table("team_players").insert({"team_id": tid, "player_abv": add}).execute()
             recalc_team_elo(tid)
             st.rerun()
 
         if roster:
-            kick = st.selectbox("Kick Player", roster)
-            if st.button("Kick"):
+            kick = st.selectbox("Kick From Team", roster)
+            if st.button("Kick Player"):
                 sb.table("team_players").delete().eq("team_id", tid).eq("player_abv", kick).execute()
                 recalc_team_elo(tid)
                 st.rerun()
@@ -198,6 +211,7 @@ elif page == "Admin":
         cookies.save()
         st.session_state.admin = False
         st.rerun()
+
 
 elif page == "Rules":
     rules = importlib.import_module("Rules")
