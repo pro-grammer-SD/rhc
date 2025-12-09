@@ -72,7 +72,8 @@ def recalc_team_elo(team_id):
         return
     players = sb.table("players").select("abv","elo").in_("abv", roster).execute().data or []
     elos = [int(p.get("elo",0)) for p in players]
-    sb.table("teams").update({"elo": int(sum(elos)/len(elos)) if elos else 0}).eq("id", team_id).execute()
+    new_elo = int(sum(elos)/len(elos)) if elos else 0
+    sb.table("teams").update({"elo": new_elo}).eq("id", team_id).execute()
 
 def recalc_all_teams():
     for tid in load_teams()["id"].tolist():
@@ -178,6 +179,7 @@ elif page == "Teams":
 
 elif page == "Admin":
     st.title("🔑 Admin Panel")
+
     if not st.session_state.admin:
         pwd = st.text_input("Key", type="password")
         if st.button("Login") and pwd == ADMIN_KEY:
@@ -186,6 +188,13 @@ elif page == "Admin":
             cookies.save()
             st.rerun()
         st.stop()
+    else:
+        if st.button("Sign Out"):
+            st.session_state.admin = False
+            cookies["hc_admin_logged_in"]="false"
+            cookies.save()
+            st.success("Signed out!")
+            st.rerun()
 
     df = load_players()
     t = load_teams()
