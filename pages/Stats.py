@@ -52,7 +52,9 @@ def recalc_team_elo(team_id):
     elos = [p["elo"] for p in (pls.data or [])]
 
     new_elo = int(sum(elos) / len(elos)) if elos else 0
-    sb.table("teams").update({"elo": new_elo}).eq("id", team_id).execute()def load_players():
+    sb.table("teams").update({"elo": new_elo}).eq("id", team_id).execute()
+    
+def load_players():
     res = sb.table("players").select("*").execute()
     return pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["abv","elo"])
 
