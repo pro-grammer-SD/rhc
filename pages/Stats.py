@@ -41,14 +41,18 @@ if "admin" not in st.session_state:
     st.session_state.admin = (cookies.get("hc_admin_logged_in") == "true")
 
 def recalc_team_elo(team_id):
-    ps = sb.table("team_players").select("player_abv").eq("team_id", team_id).execute().data
-    if not ps:
+    tps = sb.table("team_players").select("player_abv").eq("team_id", team_id).execute()
+    players_in_team = [x["player_abv"] for x in (tps.data or [])]
+    if not players_in_team:
         sb.table("teams").update({"elo": 0}).eq("id", team_id).execute()
         return
-    abvs = [x["player_abv"] for x in ps]
-    pl = sb.table("players").select("elo").in_("abv", abvs).execute().data
-    new = int(sum(x["elo"] for x in pl) / len(pl))
-    sb.table("teams").update({"elo": new}).eq("id", team_id).execute()
+    pls = sb.table("players").select("elo").filter("abv", "in", f"({','.join(players_in_team)})").execute()
+    elos = [p["elo"] for p in (pls.data or [])]
+    if not elos:
+        new_elo = 0
+    else:
+        new_elo = int(sum(elos) / len(elos))
+    sb.table("teams").update({"elo": new_elo}).eq("id", team_id).execute()
 
 def load_players():
     res = sb.table("players").select("*").execute()
