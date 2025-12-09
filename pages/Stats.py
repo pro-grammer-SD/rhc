@@ -10,28 +10,23 @@ st.set_page_config(page_title="📊 HC Stats", layout="wide", initial_sidebar_st
 
 pages = ["Stats","Teams","Admin","Rules"]
 styles = {
-    "nav": {"background-color": "rgb(255, 179, 102)"},
-    "div": {"max-width": "48rem"},
+    "nav": {"background-color": "rgb(255, 170, 85)", "padding": "4px 0"},
+    "div": {"max-width": "100vw"},
     "span": {
-        "border-radius": "0.5rem",
+        "border-radius": "0.3rem",
         "color": "rgb(49, 51, 63)",
-        "margin": "0 0.125rem",
-        "padding": "0.4375rem 1rem",
+        "margin": "0 0.05rem",
+        "padding": "0.2rem 0.45rem",
         "font-weight": "600",
-        "font-size": "1.05rem",
+        "font-size": "0.8rem",
+        "white-space": "nowrap",
     },
-    "active": {"background-color": "rgba(255, 255, 255, 0.3)"},
-    "hover": {"background-color": "rgba(255, 255, 255, 0.4)"},
+    "active": {"background-color": "rgba(255,255,255,0.35)"},
+    "hover": {"background-color": "rgba(255,255,255,0.5)"},
 }
 page = st_navbar(pages, styles=styles)
 
-hide_streamlit_style = """
-<style>
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-</style>
-"""
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+st.markdown("<style>#MainMenu{display:none;} footer{display:none;}</style>", unsafe_allow_html=True)
 
 cookies = CookieManager()
 if not cookies.ready():
@@ -43,37 +38,57 @@ ADMIN_KEY = os.getenv("ADMIN_KEY")
 sb: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 if "admin" not in st.session_state:
-    admin_cookie = cookies.get("hc_admin_logged_in")
-    st.session_state.admin = (admin_cookie == "true")
+    st.session_state.admin = (cookies.get("hc_admin_logged_in") == "true")
+
+def recalc_team_elo(team_id):
+    ps = sb.table("team_players").select("player_abv").eq("team_id", team_id).execute().data
+    if not ps:
+        sb.table("teams").update({"elo": 0}).eq("id", team_id).execute()
+        return
+    abvs = [x["player_abv"] for x in ps]
+    pl = sb.table("players").select("elo").in_("abv", abvs).execute().data
+    new = int(sum(x["elo"] for x in pl) / len(pl))
+    sb.table("teams").update({"elo": new}).eq("id", team_id).execute()
 
 def load_players():
-    data = sb.table("players").select("*").execute()
-    return pd.DataFrame(data.data) if data.data else pd.DataFrame(columns=["abv","elo"])
+    res = sb.table("players").select("*").execute()
+    return pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["abv","elo"])
 
 def load_teams():
-    data = sb.table("teams").select("*").execute()
-    return pd.DataFrame(data.data) if data.data else pd.DataFrame(columns=["id","name","elo"])
+    res = sb.table("teams").select("*").execute()
+    return pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["id","name","elo"])
 
 def load_team_players(team_id):
-    data = sb.table("team_players").select("player_abv").eq("team_id", team_id).execute()
-    return [p["player_abv"] for p in data.data] if data.data else []
+    res = sb.table("team_players").select("player_abv").eq("team_id", team_id).execute().data
+    return [x["player_abv"] for x in res] if res else []
 
-def create_team(name, player_list, elo):
-    r = sb.table("teams").insert({"name": name, "elo": elo}).execute()
-    team_id = r.data[0]["id"]
+def create_team(name, player_list):
+    if not player_list: return
+    res = sb.table("teams").insert({"name": name, "elo": 0}).execute()
+    tid = res.data[0]["id"]
     for p in player_list:
-        sb.table("team_players").insert({"team_id": team_id, "player_abv": p}).execute()
+        sb.table("team_players").insert({"team_id": tid, "player_abv": p}).execute()
+    recalc_team_elo(tid)
+
+def update_player(old, new, elo):
+    sb.table("players").update({"abv": new, "elo": elo}).eq("abv", old).execute()
+    sb.table("team_players").update({"player_abv": new}).eq("player_abv", old).execute()
+    for t in load_teams()["id"].tolist():
+        recalc_team_elo(t)
+
+def delete_player(abv):
+    sb.table("team_players").delete().eq("player_abv", abv).execute()
+    sb.table("players").delete().eq("abv", abv).execute()
+    for t in load_teams()["id"].tolist():
+        recalc_team_elo(t)
+
+def update_team(id, name):
+    sb.table("teams").update({"name": name}).eq("id", id).execute()
+    recalc_team_elo(id)
 
 def delete_team(team_id):
+    sb.table("team_players").delete().eq("team_id", team_id).execute()
     sb.table("teams").delete().eq("id", team_id).execute()
-
-def update_team(id, name, elo):
-    sb.table("teams").update({"name": name, "elo": elo}).eq("id", id).execute()
-
-def update_player(old, new_abv, elo):
-    sb.table("players").update({"abv": new_abv, "elo": elo}).eq("abv", old).execute()
-    if old != new_abv:
-        sb.rpc("rename_player", {"old_abv": old, "new_abv": new_abv}).execute()
 
 def get_rank(elo):
     if elo < 1000: return "😵 Get Lost"
@@ -87,108 +102,102 @@ if page == "Stats":
     st.title("📊 Leaderboard")
     df = load_players()
     if df.empty:
-        st.info("No players yet 😭")
+        st.info("Add some sweaty players first 😭")
         st.stop()
     df["Rank"] = df["elo"].apply(get_rank)
     df = df.sort_values("elo", ascending=False).reset_index(drop=True)
-    df["Sl"] = df.index + 1
+    df["#"] = df.index + 1
     q = st.text_input("Search")
-    rank_filter = st.selectbox("Rank Filter", ["All"] + df["Rank"].unique().tolist())
-    res = df.copy()
-    if q:
-        res = res[res["abv"].str.lower().str.contains(q.lower())]
-    if rank_filter != "All":
-        res = res[res["Rank"] == rank_filter]
-    st.dataframe(res[["Sl","abv","elo","Rank"]], width="stretch", hide_index=True)
+    f = st.selectbox("Rank Filter", ["All"] + df["Rank"].unique().tolist())
+    r = df.copy()
+    if q: r = r[r["abv"].str.lower().str.contains(q.lower())]
+    if f != "All": r = r[r["Rank"] == f]
+    st.dataframe(r[["#","abv","elo","Rank"]], use_container_width=True, hide_index=True)
 
 elif page == "Teams":
     st.title("👥 Teams")
     players = load_players()
     if players.empty:
-        st.error("Add players bruv")
+        st.error("Add players lol")
         st.stop()
 
-    tab1, tab2 = st.tabs(["Create Team","Leaderboard"])
+    t1, t2 = st.tabs(["Create Team","Leaderboard"])
 
-    with tab1:
+    with t1:
         name = st.text_input("Team Name")
         chosen = st.multiselect("Players", players["abv"].tolist())
-        if chosen:
-            team_elo = int(players.set_index("abv").loc[chosen]["elo"].mean())
-            st.metric("Team Elo", team_elo)
-            if st.button("Save Team"):
-                create_team(name, chosen, team_elo)
-                st.success("Saved")
-                st.rerun()
+        if st.button("Save") and name and chosen:
+            create_team(name, chosen)
+            st.rerun()
 
-    with tab2:
+    with t2:
         t = load_teams()
-        if not t.empty:
-            t = t.sort_values("elo", ascending=False).reset_index(drop=True)
-            t["Sl"] = t.index + 1
-            st.dataframe(t[["Sl","name","elo"]], width="stretch", hide_index=True)
+        if t.empty:
+            st.info("Where teams?")
         else:
-            st.info("No teams")
+            t = t.sort_values("elo", ascending=False).reset_index(drop=True)
+            t["#"] = t.index + 1
+            st.dataframe(t[["#","name","elo"]], use_container_width=True, hide_index=True)
 
 elif page == "Admin":
-    st.title("Admin")
+    st.title("🔑 Admin")
     if not st.session_state.admin:
         pwd = st.text_input("Key", type="password")
-        if st.button("Login"):
-            if pwd == ADMIN_KEY:
-                st.session_state.admin = True
-                cookies["hc_admin_logged_in"] = "true"
-                cookies.save()
-                st.rerun()
-            else:
-                st.error("Bruh no.")
-    else:
-        st.success("Admin Enabled")
+        if st.button("Login") and pwd == ADMIN_KEY:
+            st.session_state.admin = True
+            cookies["hc_admin_logged_in"] = "true"
+            cookies.save()
+            st.rerun()
+        st.stop()
 
-        st.subheader("Players")
-        df = load_players()
-        sel = st.selectbox("Player", df["abv"].tolist())
+    df = load_players()
+    st.subheader("Players")
+    sel = st.selectbox("Player", df["abv"].tolist()) if not df.empty else None
+    if sel:
         new_abv = st.text_input("Rename", sel)
         new_elo = st.number_input("Elo", value=int(df[df["abv"]==sel]["elo"].iloc[0]))
         if st.button("Update Player"):
             update_player(sel, new_abv, new_elo)
             st.rerun()
-        if st.button("Delete Player", type="primary"):
-            sb.table("players").delete().eq("abv", sel).execute()
-            sb.table("team_players").delete().eq("player_abv", sel).execute()
+        if st.button("Delete Player"):
+            delete_player(sel)
             st.rerun()
 
-        st.divider()
-        st.subheader("Teams")
-        t = load_teams()
-        if not t.empty:
-            sel_team = st.selectbox("Team", t["name"].tolist())
-            row = t[t["name"]==sel_team].iloc[0]
-            tid = row["id"]
-            new_name = st.text_input("Rename Team", sel_team)
-            new_team_elo = st.number_input("Team Elo", value=int(row["elo"]))
-            roster = load_team_players(tid)
-            all_ps = players["abv"].tolist()
-            addp = st.selectbox("Add Player", [p for p in all_ps if p not in roster])
-            if st.button("Add"):
-                sb.table("team_players").insert({"team_id": tid, "player_abv": addp}).execute()
-                st.rerun()
-            remp = st.selectbox("Kick Player", roster)
+    st.divider()
+    st.subheader("Teams")
+    t = load_teams()
+    if not t.empty:
+        sel_team = st.selectbox("Team", t["name"].tolist())
+        row = t[t["name"] == sel_team].iloc[0]
+        tid = row["id"]
+        new_name = st.text_input("Rename Team", row["name"])
+        if st.button("Update Team"):
+            update_team(tid, new_name)
+            st.rerun()
+
+        roster = load_team_players(tid)
+        add = st.selectbox("Add Player", [p for p in df["abv"].tolist() if p not in roster])
+        if st.button("Add"):
+            sb.table("team_players").insert({"team_id": tid, "player_abv": add}).execute()
+            recalc_team_elo(tid)
+            st.rerun()
+
+        if roster:
+            kick = st.selectbox("Kick Player", roster)
             if st.button("Kick"):
-                sb.table("team_players").delete().eq("team_id", tid).eq("player_abv", remp).execute()
-                st.rerun()
-            if st.button("Update Team"):
-                update_team(tid, new_name, new_team_elo)
-                st.rerun()
-            if st.button("Delete Team", type="primary"):
-                delete_team(tid)
+                sb.table("team_players").delete().eq("team_id", tid).eq("player_abv", kick).execute()
+                recalc_team_elo(tid)
                 st.rerun()
 
-        if st.button("Logout"):
-            cookies["hc_admin_logged_in"] = "false"
-            cookies.save()
-            st.session_state.admin = False
+        if st.button("Delete Team"):
+            delete_team(tid)
             st.rerun()
+
+    if st.button("Logout"):
+        cookies["hc_admin_logged_in"] = "false"
+        cookies.save()
+        st.session_state.admin = False
+        st.rerun()
 
 elif page == "Rules":
     rules = importlib.import_module("Rules")
