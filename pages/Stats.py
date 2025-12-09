@@ -66,60 +66,43 @@ def load_team_players(team_id):
     return [x["player_abv"] for x in (res.data or [])]
 
 def recalc_team_elo(team_id):
-    players_in_team = load_team_players(team_id)
-    if not players_in_team:
+    roster = load_team_players(team_id)
+    if not roster:
         sb.table("teams").update({"elo": 0}).eq("id", team_id).execute()
         return
+    players = sb.table("players").select("abv","elo").in_("abv", roster).execute().data or []
+    elos = [int(p.get("elo",0)) for p in players]
+    sb.table("teams").update({"elo": int(sum(elos)/len(elos)) if elos else 0}).eq("id", team_id).execute()
 
-    pl_res = sb.table("players").select("abv","elo").in_("abv", players_in_team).execute()
-    pl_data = pl_res.data or []
-    
-    if not pl_data:
-        st.write(f"⚠️ No players found for team {team_id}. Check player ABVs: {players_in_team}")
-        sb.table("teams").update({"elo": 0}).eq("id", team_id).execute()
-        return
+def recalc_all_teams():
+    for tid in load_teams()["id"].tolist():
+        recalc_team_elo(tid)
 
-    elos = []
-    for p in pl_data:
-        try:
-            elos.append(int(p["elo"]))
-        except:
-            elos.append(0)
-    new_elo = int(sum(elos)/len(elos)) if elos else 0
-    sb.table("teams").update({"elo": new_elo}).eq("id", team_id).execute()
-    st.write(f"✅ Team {team_id} ELO recalculated: {new_elo}")
-
-def create_team(name, player_list):
-    if not player_list: return
+def create_team(name, roster):
+    if not name or not roster: return
     res = sb.table("teams").insert({"name": name, "elo": 0}).execute()
     tid = res.data[0]["id"]
-    for p in player_list:
+    for p in roster:
         sb.table("team_players").insert({"team_id": tid, "player_abv": p}).execute()
     recalc_team_elo(tid)
 
 def update_player(old, new, elo):
     sb.table("players").update({"abv": new, "elo": elo}).eq("abv", old).execute()
     sb.table("team_players").update({"player_abv": new}).eq("player_abv", old).execute()
-    for t in load_teams()["id"].tolist():
-        recalc_team_elo(t)
+    recalc_all_teams()
 
 def delete_player(abv):
     sb.table("team_players").delete().eq("player_abv", abv).execute()
     sb.table("players").delete().eq("abv", abv).execute()
-    for t in load_teams()["id"].tolist():
-        recalc_team_elo(t)
+    recalc_all_teams()
 
-def update_team(id, name):
-    sb.table("teams").update({"name": name}).eq("id", id).execute()
-    recalc_team_elo(id)
+def update_team(tid, name):
+    sb.table("teams").update({"name": name}).eq("id", tid).execute()
+    recalc_team_elo(tid)
 
-def delete_team(team_id):
-    sb.table("team_players").delete().eq("team_id", team_id).execute()
-    sb.table("teams").delete().eq("team_id", team_id).execute()
-
-def recalc_all_teams():
-    for tid in load_teams()["id"].tolist():
-        recalc_team_elo(tid)
+def delete_team(tid):
+    sb.table("team_players").delete().eq("team_id", tid).execute()
+    sb.table("teams").delete().eq("id", tid).execute()
 
 # ---------------------- Pages ----------------------
 if page == "Stats":
@@ -136,16 +119,17 @@ if page == "Stats":
     f = st.selectbox("Rank Filter", ["All"] + df["Rank"].unique().tolist())
     r = df.copy()
     if q: r = r[r["abv"].str.lower().str.contains(q.lower())]
-    if f != "All": r = r[r["Rank"] == f]
+    if f != "All": r = r[r["Rank"]==f]
     st.dataframe(r[["#","abv","elo","Rank"]], use_container_width=True, hide_index=True)
 
     st.markdown("### 📈 Player ELO Chart")
     if not r.empty:
         fig = px.bar(r, x="abv", y="elo", text="elo", labels={"abv":"Player","elo":"ELO"})
         fig.update_traces(textposition="outside")
-        st.plotly_chart(fig, use_container_width=True)
+        fig.update_layout(modebar={"remove":["zoom","pan","select","lasso","resetScale"]})
+        st.plotly_chart(fig, width="stretch")
     else:
-        st.info("No data to display in chart.")
+        st.info("No data to display.")
 
 elif page == "Teams":
     st.title("👥 Teams")
@@ -166,39 +150,31 @@ elif page == "Teams":
             st.rerun()
 
     with t2:
-        t = load_teams()
-        if t.empty:
+        teams_df = load_teams()
+        if teams_df.empty:
             st.info("No teams yet")
         else:
-            t = t.sort_values("elo", ascending=False).reset_index(drop=True)
-            t["#"] = t.index + 1
-            st.dataframe(t[["#","name","elo"]], use_container_width=True, hide_index=True)
+            teams_df = teams_df.sort_values("elo", ascending=False).reset_index(drop=True)
+            teams_df["#"] = teams_df.index+1
+            st.dataframe(teams_df[["#","name","elo"]], use_container_width=True, hide_index=True)
 
             st.markdown("### 📊 Team Player Contributions")
-            team_id = st.selectbox("Select Team", t["id"].tolist(),
-                                   format_func=lambda x: t[t["id"]==x]["name"].iloc[0])
-            roster = load_team_players(team_id)
-            if roster:
-                pl = sb.table("players").select("abv","elo").in_("abv", roster).execute().data or []
-                pl_df = pd.DataFrame(pl).sort_values("elo", ascending=False)
-                if not pl_df.empty:
-                    fig2 = px.bar(pl_df, x="abv", y="elo", text="elo", labels={"abv":"Player","elo":"ELO"})
-                    fig2.update_traces(textposition="outside")
-                    st.plotly_chart(fig2, use_container_width=True)
-
-            st.markdown("### 📊 Team Total ELO Breakdown")
-            team_data = []
-            for tid in t["id"]:
+            team_ids = teams_df["id"].tolist()
+            sel_team = st.selectbox("Select Team", team_ids,
+                                    format_func=lambda x: teams_df[teams_df["id"]==x]["name"].iloc[0] 
+                                    if not teams_df[teams_df["id"]==x].empty else "Unknown")
+            filtered = teams_df[teams_df["id"]==sel_team]
+            if not filtered.empty:
+                tid = filtered.iloc[0]["id"]
                 roster = load_team_players(tid)
-                pl = sb.table("players").select("abv","elo").in_("abv", roster).execute().data or []
-                for p in pl:
-                    team_data.append({"Team": t[t["id"]==tid]["name"].iloc[0], "Player": p["abv"], "ELO": p["elo"]})
-            if team_data:
-                team_df = pd.DataFrame(team_data)
-                fig3 = px.bar(team_df, x="Team", y="ELO", color="Player", text="ELO")
-                fig3.update_traces(textposition="inside")
-                fig3.update_layout(barmode='stack')
-                st.plotly_chart(fig3, use_container_width=True)
+                if roster:
+                    pl_data = sb.table("players").select("abv","elo").in_("abv", roster).execute().data or []
+                    pl_df = pd.DataFrame(pl_data).sort_values("elo", ascending=False)
+                    if not pl_df.empty:
+                        fig = px.bar(pl_df, x="abv", y="elo", text="elo", labels={"abv":"Player","elo":"ELO"})
+                        fig.update_traces(textposition="outside")
+                        fig.update_layout(modebar={"remove":["zoom","pan","select","lasso","resetScale"]})
+                        st.plotly_chart(fig, width="stretch")
 
 elif page == "Admin":
     st.title("🔑 Admin Panel")
@@ -206,13 +182,15 @@ elif page == "Admin":
         pwd = st.text_input("Key", type="password")
         if st.button("Login") and pwd == ADMIN_KEY:
             st.session_state.admin = True
-            cookies["hc_admin_logged_in"] = "true"
+            cookies["hc_admin_logged_in"]="true"
             cookies.save()
             st.rerun()
         st.stop()
 
-    st.subheader("Players")
     df = load_players()
+    t = load_teams()
+
+    st.subheader("Players")
     if not df.empty:
         sel = st.selectbox("Select Player", df["abv"].tolist())
         if sel:
@@ -227,54 +205,33 @@ elif page == "Admin":
                 st.success("Player deleted")
                 st.rerun()
 
-    st.divider()
     st.subheader("Teams")
-    t = load_teams()
     if not t.empty:
-        sel_team = st.selectbox("Select Team", t["name"].tolist())
-        row = t[t["name"]==sel_team].iloc[0]
-        tid = row["id"]
-
-        new_name = st.text_input("Rename Team", row["name"])
-        if st.button("Update Team"):
-            update_team(tid, new_name)
-            st.success("Team updated")
-            st.rerun()
-
-        roster = load_team_players(tid)
-        all_players = df["abv"].tolist()
-        add = st.selectbox("Add Player", [p for p in all_players if p not in roster])
-        if st.button("Add"):
-            sb.table("team_players").insert({"team_id": tid, "player_abv": add}).execute()
-            recalc_team_elo(tid)
-            st.success(f"Added {add}")
-            st.rerun()
-
-        if roster:
-            kick = st.selectbox("Kick Player", roster)
-            if st.button("Kick"):
-                sb.table("team_players").delete().eq("team_id", tid).eq("player_abv", kick).execute()
-                recalc_team_elo(tid)
-                st.success(f"Kicked {kick}")
+        sel_team_name = st.selectbox("Select Team", t["name"].tolist())
+        filtered = t[t["name"]==sel_team_name]
+        if not filtered.empty:
+            tid = filtered.iloc[0]["id"]
+            new_name = st.text_input("Rename Team", filtered.iloc[0]["name"])
+            if st.button("Update Team"):
+                update_team(tid, new_name)
+                st.success("Team updated")
                 st.rerun()
 
-        if st.button("Delete Team"):
-            delete_team(tid)
-            st.success("Team deleted")
-            st.rerun()
+            roster = load_team_players(tid)
+            add = st.selectbox("Add Player", [p for p in df["abv"].tolist() if p not in roster])
+            if st.button("Add"):
+                sb.table("team_players").insert({"team_id": tid, "player_abv": add}).execute()
+                recalc_team_elo(tid)
+                st.success(f"Added {add}")
+                st.rerun()
 
-    st.divider()
-    st.markdown("### 🔄 Global Maintenance")
-    if st.button("Recalculate All Team ELOs"):
-        recalc_all_teams()
-        st.success("All team ELOs refreshed!")
-        st.rerun()
-
-    if st.button("Logout"):
-        cookies["hc_admin_logged_in"] = "false"
-        cookies.save()
-        st.session_state.admin = False
-        st.rerun()
+            if roster:
+                kick = st.selectbox("Kick Player", roster)
+                if st.button("Kick"):
+                    sb.table("team_players").delete().eq("team_id", tid).eq("player_abv", kick).execute()
+                    recalc_team_elo(tid)
+                    st.success(f"Kicked {kick}")
+                    st.rerun()
 
 elif page == "Rules":
     rules = importlib.import_module("Rules")
