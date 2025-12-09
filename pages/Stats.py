@@ -110,7 +110,7 @@ if page == "Stats":
     r = df.copy()
     if q: r = r[r["abv"].str.lower().str.contains(q.lower())]
     if f != "All": r = r[r["Rank"]==f]
-    st.dataframe(r[["#","abv","elo","Rank"]], use_container_width=True, hide_index=True)
+    st.dataframe(r[["#","abv","elo","Rank"]], width="stretch", hide_index=True)
 
     st.markdown("### 📈 Player ELO Chart")
     if not r.empty:
@@ -146,7 +146,7 @@ elif page == "Teams":
         else:
             teams_df = teams_df.sort_values("elo", ascending=False).reset_index(drop=True)
             teams_df["#"] = teams_df.index+1
-            st.dataframe(teams_df[["#","name","elo"]], use_container_width=True, hide_index=True)
+            st.dataframe(teams_df[["#","name","elo"]], width="stretch", hide_index=True)
 
             st.markdown("### 📊 Team Player Contributions")
             team_ids = teams_df["id"].tolist()
