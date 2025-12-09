@@ -43,18 +43,16 @@ if "admin" not in st.session_state:
 def recalc_team_elo(team_id):
     tps = sb.table("team_players").select("player_abv").eq("team_id", team_id).execute()
     players_in_team = [x["player_abv"] for x in (tps.data or [])]
+
     if not players_in_team:
         sb.table("teams").update({"elo": 0}).eq("id", team_id).execute()
         return
-    pls = sb.table("players").select("elo").filter("abv", "in", f"({','.join(players_in_team)})").execute()
-    elos = [p["elo"] for p in (pls.data or [])]
-    if not elos:
-        new_elo = 0
-    else:
-        new_elo = int(sum(elos) / len(elos))
-    sb.table("teams").update({"elo": new_elo}).eq("id", team_id).execute()
 
-def load_players():
+    pls = sb.table("players").select("elo").filter("abv", "in", f"({','.join([f'\"{p}\"' for p in players_in_team])})").execute()
+    elos = [p["elo"] for p in (pls.data or [])]
+
+    new_elo = int(sum(elos) / len(elos)) if elos else 0
+    sb.table("teams").update({"elo": new_elo}).eq("id", team_id).execute()def load_players():
     res = sb.table("players").select("*").execute()
     return pd.DataFrame(res.data) if res.data else pd.DataFrame(columns=["abv","elo"])
 
