@@ -13,15 +13,7 @@ pages = ["Stats","Teams","Admin","Rules"]
 styles = {
     "nav": {"background-color": "rgb(255, 170, 85)", "padding": "4px 0"},
     "div": {"max-width": "100vw"},
-    "span": {
-        "border-radius": "0.3rem",
-        "color": "rgb(49, 51, 63)",
-        "margin": "0 0.05rem",
-        "padding": "0.2rem 0.45rem",
-        "font-weight": "600",
-        "font-size": "0.8rem",
-        "white-space": "nowrap",
-    },
+    "span": {"border-radius": "0.3rem","color": "rgb(49, 51, 63)","margin": "0 0.05rem","padding": "0.2rem 0.45rem","font-weight": "600","font-size": "0.8rem","white-space": "nowrap"},
     "active": {"background-color": "rgba(255,255,255,0.35)"},
     "hover": {"background-color": "rgba(255,255,255,0.5)"},
 }
@@ -40,7 +32,6 @@ sb: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 if "admin" not in st.session_state:
     st.session_state.admin = (cookies.get("hc_admin_logged_in") == "true")
 
-# ---------------------- Helpers ----------------------
 def get_rank(elo):
     if elo < 1000: return "😵 Get Lost"
     if elo < 3000: return "🟢 Newbie"
@@ -80,7 +71,6 @@ def recalc_all_teams():
         recalc_team_elo(tid)
 
 def create_team(name, roster):
-    if not name or not roster: return
     res = sb.table("teams").insert({"name": name, "elo": 0}).execute()
     tid = res.data[0]["id"]
     for p in roster:
@@ -105,7 +95,6 @@ def delete_team(tid):
     sb.table("team_players").delete().eq("team_id", tid).execute()
     sb.table("teams").delete().eq("id", tid).execute()
 
-# ---------------------- Pages ----------------------
 if page == "Stats":
     st.title("📊 Player Leaderboard")
     df = load_players()
@@ -162,7 +151,7 @@ elif page == "Teams":
             st.markdown("### 📊 Team Player Contributions")
             team_ids = teams_df["id"].tolist()
             sel_team = st.selectbox("Select Team", team_ids,
-                                    format_func=lambda x: teams_df[teams_df["id"]==x]["name"].iloc[0] 
+                                    format_func=lambda x: teams_df[teams_df["id"]==x]["name"].iloc[0]
                                     if not teams_df[teams_df["id"]==x].empty else "Unknown")
             filtered = teams_df[teams_df["id"]==sel_team]
             if not filtered.empty:
@@ -179,7 +168,6 @@ elif page == "Teams":
 
 elif page == "Admin":
     st.title("🔑 Admin Panel")
-
     if not st.session_state.admin:
         pwd = st.text_input("Key", type="password")
         if st.button("Login") and pwd == ADMIN_KEY:
@@ -225,7 +213,6 @@ elif page == "Admin":
                 update_team(tid, new_name)
                 st.success("Team updated")
                 st.rerun()
-
             roster = load_team_players(tid)
             add = st.selectbox("Add Player", [p for p in df["abv"].tolist() if p not in roster])
             if st.button("Add"):
@@ -233,7 +220,6 @@ elif page == "Admin":
                 recalc_team_elo(tid)
                 st.success(f"Added {add}")
                 st.rerun()
-
             if roster:
                 kick = st.selectbox("Kick Player", roster)
                 if st.button("Kick"):
@@ -241,6 +227,10 @@ elif page == "Admin":
                     recalc_team_elo(tid)
                     st.success(f"Kicked {kick}")
                     st.rerun()
+            if st.button("Delete Team"):
+                delete_team(tid)
+                st.success("Team deleted")
+                st.rerun()
 
 elif page == "Rules":
     rules = importlib.import_module("Rules")
