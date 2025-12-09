@@ -1,4 +1,5 @@
-pandas
+panda
+plotly
 streamlit
 st-cookies-manager
 streamlit-community-navigation-bar
