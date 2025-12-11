@@ -14,7 +14,7 @@ def show_rules():
         "9000+ → 👑 Legend",
         "🏃‍♂️ Runs scored between r and r+10 → + (r+10) ELO points.",
         "😈 Misconduct by a player → -500 ELO.",
-        "🫂 For Aided Wickets (AW), the player who delivered the ball gets +20 ELO and the player who helped the bowler for the numerical decision gets +10 ELO."
+        "🫂 For Aided Wickets (AW), the player who delivered the ball gets +20 ELO and the player who helped the bowler for the numerical decision gets +10 ELO.",
         "🙅‍♂️ No passes allowed in batting, unless the player is unwell.",
         "🎯 Each wicket taken → +20 ELO.",
         "⛔ No 6-limit matches allowed. Only 10-limit matches.",
