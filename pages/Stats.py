@@ -188,6 +188,16 @@ elif page == "Admin":
     t = load_teams()
 
     st.subheader("Players")
+    with st.expander("➕ Add New Player"):
+        abv = st.text_input("Player ABV")
+        elo = st.number_input("ELO", min_value=0, value=1000)
+        if st.button("Add Player"):
+            if abv and abv not in df["abv"].tolist():
+                sb.table("players").insert({"abv": abv, "elo": elo}).execute()
+                st.success("Player added")
+                st.rerun()
+            else:
+                st.error("Invalid or duplicate ABV")
     if not df.empty:
         sel = st.selectbox("Select Player", df["abv"].tolist())
         if sel:
